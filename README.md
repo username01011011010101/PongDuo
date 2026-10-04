@@ -7,6 +7,7 @@ Pong à deux joueurs sur le même téléphone Android.
 - **Joueur 1** (cyan) contrôle la raquette du bas, **Joueur 2** (rose) celle du haut.
 - Glissez le doigt dans **votre moitié** de l'écran : la raquette suit votre doigt. Les deux joueurs peuvent jouer en même temps (multitouch).
 - Plus la balle touche le bord de la raquette, plus l'angle de renvoi est fort. La balle accélère à chaque échange.
+- **Son** : sur la ligne du milieu, le bouton **♪** (à gauche) coupe/relance la musique, le bouton **FX** (à droite) coupe/relance les effets sonores. Le choix est mémorisé.
 - Premier à **7 points** gagne. Touchez l'écran pour rejouer.
 
 ## Obtenir l'APK

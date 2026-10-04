@@ -22,7 +22,7 @@ import kotlin.random.Random
  * Joueur 1 = raquette du bas (cyan), Joueur 2 = raquette du haut (rose).
  * Chaque joueur glisse le doigt dans SA moitié d'écran. Multitouch géré.
  */
-class PongView(context: Context) : View(context) {
+class PongView(context: Context, private val sound: Sound) : View(context) {
 
     private enum class State { WAITING, PLAYING, SERVING, GAME_OVER }
 
@@ -86,6 +86,18 @@ class PongView(context: Context) : View(context) {
         textAlign = Paint.Align.CENTER
     }
     private val rect = RectF()
+    private val paintBtn = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val paintIcon = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    private val paintSlash = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#FF5A5A")
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private var btnR = 0f   // rayon des boutons son (sur la ligne du milieu)
 
     init {
         setBackgroundColor(COLOR_BG)
@@ -104,6 +116,9 @@ class PongView(context: Context) : View(context) {
         paintLine.pathEffect = DashPathEffect(floatArrayOf(w * 0.03f, w * 0.025f), 0f)
         paintScore.textSize = w * 0.16f
         paintMsg.textSize = w * 0.055f
+        btnR = w * 0.055f
+        paintIcon.textSize = btnR * 1.1f
+        paintSlash.strokeWidth = btnR * 0.14f
         p1x = w / 2
         p2x = w / 2
         resetBall()
@@ -145,6 +160,7 @@ class PongView(context: Context) : View(context) {
         vx = (speed * sin(angle)).toFloat()
         vy = (speed * cos(angle)).toFloat() * dir
         state = State.PLAYING
+        sound.play(Sound.Fx.SERVE)
     }
 
     private fun newGame() {
@@ -186,8 +202,8 @@ class PongView(context: Context) : View(context) {
         by += vy * dt
 
         // Murs latéraux
-        if (bx - ballR < 0f) { bx = ballR; vx = abs(vx) }
-        if (bx + ballR > w) { bx = w - ballR; vx = -abs(vx) }
+        if (bx - ballR < 0f) { bx = ballR; vx = abs(vx); sound.play(Sound.Fx.WALL) }
+        if (bx + ballR > w) { bx = w - ballR; vx = -abs(vx); sound.play(Sound.Fx.WALL) }
 
         // Raquette du bas (joueur 1)
         val p1Top = h - paddleMargin - paddleH
@@ -197,6 +213,7 @@ class PongView(context: Context) : View(context) {
             bounce(p1x, towardTop = true)
             by = p1Top - ballR
             flash1 = 1f
+            sound.play(Sound.Fx.HIT1)
         }
 
         // Raquette du haut (joueur 2)
@@ -207,6 +224,7 @@ class PongView(context: Context) : View(context) {
             bounce(p2x, towardTop = false)
             by = p2Bottom + ballR
             flash2 = 1f
+            sound.play(Sound.Fx.HIT2)
         }
 
         // Points
@@ -233,9 +251,11 @@ class PongView(context: Context) : View(context) {
             winner = if (score1 > score2) 1 else 2
             overTimer = 1.0f
             state = State.GAME_OVER
+            sound.play(Sound.Fx.WIN)
         } else {
             state = State.SERVING
             serveTimer = SERVE_DELAY
+            sound.play(Sound.Fx.POINT)
         }
     }
 
@@ -246,6 +266,15 @@ class PongView(context: Context) : View(context) {
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val action = event.actionMasked
+
+        // Boutons son : musique à gauche, effets à droite (sur la ligne du milieu)
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            val i = event.actionIndex
+            when (buttonAt(event.getX(i), event.getY(i))) {
+                1 -> { sound.toggleMusic(); return true }
+                2 -> { sound.toggleSfx(); return true }
+            }
+        }
 
         if (action == MotionEvent.ACTION_DOWN &&
             (state == State.WAITING || (state == State.GAME_OVER && overTimer <= 0f))
@@ -260,6 +289,7 @@ class PongView(context: Context) : View(context) {
         ) {
             val half = paddleW / 2
             for (i in 0 until event.pointerCount) {
+                if (buttonAt(event.getX(i), event.getY(i)) != 0) continue
                 val x = event.getX(i).coerceIn(half, w - half)
                 if (event.getY(i) > h / 2) p1x = x else p2x = x
             }
@@ -292,6 +322,10 @@ class PongView(context: Context) : View(context) {
         canvas.drawText(score2.toString(), w / 2, h * 0.5f + h * 0.13f, paintScore)
         canvas.restore()
 
+        // Boutons son
+        drawSoundButton(canvas, musicBtnX(), "♪", sound.musicOn)
+        drawSoundButton(canvas, sfxBtnX(), "FX", sound.sfxOn)
+
         // Raquettes
         drawPaddle(canvas, p1x, h - paddleMargin - paddleH, paintP1, COLOR_P1, flash1)
         drawPaddle(canvas, p2x, paddleMargin, paintP2, COLOR_P2, flash2)
@@ -319,6 +353,32 @@ class PongView(context: Context) : View(context) {
         }
 
         if (running) postInvalidateOnAnimation()
+    }
+
+    private fun musicBtnX() = btnR * 1.5f
+    private fun sfxBtnX() = w - btnR * 1.5f
+
+    /** 0 = aucun, 1 = musique, 2 = effets. Zone tactile un peu plus large que le dessin. */
+    private fun buttonAt(x: Float, y: Float): Int {
+        val r = btnR * 1.5f
+        if (abs(y - h / 2) > r) return 0
+        if (abs(x - musicBtnX()) <= r) return 1
+        if (abs(x - sfxBtnX()) <= r) return 2
+        return 0
+    }
+
+    private fun drawSoundButton(canvas: Canvas, cx: Float, label: String, on: Boolean) {
+        val cy = h / 2
+        paintBtn.color = COLOR_BG
+        canvas.drawCircle(cx, cy, btnR, paintBtn)
+        paintBtn.color = Color.argb(if (on) 70 else 35, 255, 255, 255)
+        canvas.drawCircle(cx, cy, btnR, paintBtn)
+        paintIcon.alpha = if (on) 255 else 110
+        canvas.drawText(label, cx, cy - (paintIcon.descent() + paintIcon.ascent()) / 2, paintIcon)
+        if (!on) {
+            val d = btnR * 0.6f
+            canvas.drawLine(cx - d, cy - d, cx + d, cy + d, paintSlash)
+        }
     }
 
     private fun drawPaddle(canvas: Canvas, cx: Float, top: Float, paint: Paint, color: Int, flash: Float) {

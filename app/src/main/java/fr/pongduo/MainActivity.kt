@@ -1,6 +1,7 @@
 package fr.pongduo
 
 import android.app.Activity
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -11,11 +12,14 @@ import android.view.WindowManager
 class MainActivity : Activity() {
 
     private lateinit var game: PongView
+    private lateinit var sound: Sound
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        game = PongView(this)
+        volumeControlStream = AudioManager.STREAM_MUSIC
+        sound = Sound(this)
+        game = PongView(this, sound)
         setContentView(game)
         hideSystemBars()
     }
@@ -28,11 +32,18 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         game.pause()
+        sound.onPause()
     }
 
     override fun onResume() {
         super.onResume()
         game.resume()
+        sound.onResume()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        sound.release()
     }
 
     @Suppress("DEPRECATION")
